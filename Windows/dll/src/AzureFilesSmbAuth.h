@@ -18,21 +18,21 @@ extern "C" AZUREFILESSMBAUTH_API HRESULT SmbSetCredential(
     _Out_ PDWORD pdwCredentialExpiresInSeconds
 );
 
+extern "C" AZUREFILESSMBAUTH_API HRESULT SmbSetCredentialUsingTokenFromIMDS(
+    _In_  PCWSTR pwszFileEndpointUri,
+    _Out_ PDWORD pdwCredentialExpiresInSeconds
+);
+
 extern "C" AZUREFILESSMBAUTH_API HRESULT SmbClearCredential(
     _In_  PCWSTR pwszFileEndpointUri
 );
 
-extern "C" AZUREFILESSMBAUTH_API HRESULT SmbShowCredential(
-    _In_  PCWSTR pwszFileEndpointUri
-);
-
 HRESULT SmbSetCredentialInternal(
-    _In_  PCWSTR pwszFileEndpointUri,
-    _In_  PCWSTR pwszOauthToken,
-    _Out_ PDWORD pdwCredentialExpiresInSeconds
+    _In_      PCWSTR pwszFileEndpointUri,
+    _In_opt_  PCWSTR pwszOauthToken,
+    _Out_     PDWORD pdwCredentialExpiresInSeconds
     );
 
-HRESULT SmbShowOrClearCredentialInternal(
-    _In_  bool   bClear,
+HRESULT SmbClearCredentialInternal(
     _In_  PCWSTR pwszFileEndpointUri
     );

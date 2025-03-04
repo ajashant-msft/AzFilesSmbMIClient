@@ -3,4 +3,4 @@ LIBRARY      "AzureFilesSmbAuth.DLL"
 EXPORTS
     SmbSetCredential
     SmbClearCredential
-    SmbShowCredential
+    SmbSetCredentialUsingTokenFromIMDS

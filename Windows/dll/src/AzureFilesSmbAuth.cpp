@@ -901,9 +901,9 @@ DWORD elapsedSecondsFromNow(
 }
 
 HRESULT SmbSetCredentialInternal(
-    _In_  PCWSTR pwszFileEndpointUri,
-    _In_  PCWSTR pwszOauthToken,
-    _Out_ PDWORD pdwCredentialExpiresInSeconds
+    _In_      PCWSTR pwszFileEndpointUri,
+    _In_opt_  PCWSTR pwszOauthToken,
+    _Out_     PDWORD pdwCredentialExpiresInSeconds
     )
 {
     // Initialize logger first
@@ -920,10 +920,9 @@ HRESULT SmbSetCredentialInternal(
     try
     {
         std::wstring wstrAccountFileUri = pwszFileEndpointUri;
-        std::wstring wstrAccessToken = pwszOauthToken;
 
-        BOOL bGetTokenFromImds = wstrAccessToken.empty();
-        LOG(Logger::INFO, L"Authenticating access to '%ls' %ls", wstrAccountFileUri.c_str(), bGetTokenFromImds ? L"by fetching OAuth token from IMDS" : L"using provided OAuth token");
+        BOOL bGetTokenFromImds = (pwszOauthToken == nullptr);
+        LOG(Logger::INFO, L"Authenticating access to '%ls' %ls", wstrAccountFileUri.c_str(), bGetTokenFromImds ? L"by fetching OAuth token from IMDS endpoint" : L"using provided OAuth token");
 
         if (pwszFileEndpointUri == nullptr || pwszFileEndpointUri[0] == L'\0') throw E_INVALIDARG;
         if (pdwCredentialExpiresInSeconds == nullptr) throw E_INVALIDARG;
@@ -936,22 +935,31 @@ HRESULT SmbSetCredentialInternal(
         }
 
         std::string strHttpResponse;
+        std::wstring wstrAccessToken;
 
         if (bGetTokenFromImds)
         {
+            // Get token for resource=https://storage.azure.com.  Note that there is NO trailing '/'.
+            // OK     --> resource=https://storage.azure.com
+            // NOT OK --> resource=https://storage.azure.com/
+
             hrError = DoHttpVerb(L"GET",
-                                 L"http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://storage.azure.com/",
+                                 L"http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://storage.azure.com",
                                  L"",
                                  strHttpResponse);
             if (FAILED(hrError))
             {
-                LOG(Logger::ERR, L"GET http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://storage.azure.com/ failed with error hr=0x%X", hrError);
+                LOG(Logger::ERR, L"GET http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://storage.azure.com failed with error hr=0x%X", hrError);
                 throw hrError;
             }
 
             std::string  access_tokenstr = GetValueFromJson(strHttpResponse, "access_token");
             wstrAccessToken = UTF8ToWide(access_tokenstr);
             strHttpResponse.clear();
+        }
+        else
+        {
+            wstrAccessToken = pwszOauthToken;
         }
 
         hrError = DoHttpVerb(L"POST",
@@ -1003,16 +1011,16 @@ HRESULT SmbSetCredentialInternal(
     return hrError;
 }
 
-HRESULT SmbShowOrClearCredentialInternal(
-    _In_  bool   bClear,
+HRESULT SmbClearCredentialInternal(
     _In_  PCWSTR pwszFileEndpointUri
     )
 {
     // Initialize logger first
     s_logger.Initialize();
 
-    HRESULT hrError = S_OK;
+    LOG(Logger::VERBOSE, L"BEGIN");
 
+    HRESULT hrError = S_OK;
     try
     {
         if (pwszFileEndpointUri == nullptr || pwszFileEndpointUri[0] == L'\0') throw E_INVALIDARG;
@@ -1023,11 +1031,13 @@ HRESULT SmbShowOrClearCredentialInternal(
         wstrFileUri = wstrFileUri.substr(8);   // remove https://
         wstrFileUri = L"cifs/" + wstrFileUri;  // append cifs/
 
-        hrError = DisplayKerbTicket(wstrFileUri.c_str(), bClear /*bPurge*/);
+        hrError = DisplayKerbTicket(wstrFileUri.c_str(), true /*bPurge*/);
         if (FAILED(hrError))
         {
             throw hrError;
         }
+
+        LOG(Logger::INFO, L"SUCCESS");
     }
     catch (const std::exception& e)
     {
@@ -1040,5 +1050,6 @@ HRESULT SmbShowOrClearCredentialInternal(
         LOG(Logger::ERR, L"HRESULT exception hr=0x%X", hrError);
     }
 
+    LOG(Logger::VERBOSE, L"END", hrError);
     return hrError;
 }
