@@ -1,4 +1,18 @@
-#include "pch.h"
+/*++
+
+Copyright (c) Microsoft Corporation. All rights reserved.
+
+Module Name:
+
+    Logger.cpp
+
+Abstract:
+
+    C++ class that implements logging for this dll.
+
+--*/
+
+#include "framework.h"
 #include <strsafe.h>
 #include <iostream>
 #include <sstream>
@@ -9,7 +23,7 @@
 #include "Logger.h"
 
 Logger::Logger()
-    : logFilePath_(L"AzureFilesSmbAuthLog.log"), verbosityLevel_(NONE), loggerInitialized_(false)
+    : logFilePath_(L"AzFilesSmbMI.log"), verbosityLevel_(NONE), loggerInitialized_(false)
 { }
 
 void Logger::Initialize()
@@ -65,7 +79,7 @@ void Logger::log(_In_ PCWSTR   pwszFunction,
                  _In_ LogLevel level,
                  _In_ PCWSTR   pszFormat, ...)
 {
-    if (level <= verbosityLevel_) 
+    if (level <= verbosityLevel_)
     {
         std::lock_guard<std::mutex> lock(mutex_);
 
@@ -86,7 +100,7 @@ void Logger::log(_In_ PCSTR pszFunction,
                  _In_ LogLevel level,
                  _In_ PCSTR pszFormat, ...)
 {
-    if (level <= verbosityLevel_) 
+    if (level <= verbosityLevel_)
     {
         std::lock_guard<std::mutex> lock(mutex_);
 
@@ -103,7 +117,7 @@ void Logger::log(_In_ PCSTR pszFunction,
     }
 }
 
-void Logger::ensureLogFileExists() 
+void Logger::ensureLogFileExists()
 {
     HANDLE hFile = CreateFileW( logFilePath_.c_str(),           // File name
                                 GENERIC_READ | GENERIC_WRITE,   // Desired access
@@ -123,7 +137,7 @@ void Logger::ensureLogFileExists()
 }
 
 void Logger::loadVerbosityFromRegistry(
-    _In_ const std::wstring& registryKeyPath) 
+    _In_ const std::wstring& registryKeyPath)
 {
     HKEY hKey;
     DWORD verbosity = 0; // Default to NONE
@@ -158,7 +172,7 @@ Logger::LogLevel Logger::verbosityToLogLevel(
     _In_ DWORD verbosity)
 {
     if (verbosity == 1) return LogLevel::ERR;
-    if (verbosity == 2) return LogLevel::WARNING;
+    if (verbosity == 2) return LogLevel::WARN;
     if (verbosity == 3) return LogLevel::INFO;
     if (verbosity == 4) return LogLevel::VERBOSE;
     return LogLevel::NONE;
@@ -167,10 +181,10 @@ Logger::LogLevel Logger::verbosityToLogLevel(
 std::wstring Logger::logLevelToString(
     _In_ Logger::LogLevel level)
 {
-    switch (level) 
+    switch (level)
     {
         case LogLevel::ERR:     return L"ERROR";
-        case LogLevel::WARNING: return L"WARN";
+        case LogLevel::WARN:    return L"WARN";
         case LogLevel::INFO:    return L"INFO";
         case LogLevel::VERBOSE: return L"VERB";
         default:                return L"NONE";

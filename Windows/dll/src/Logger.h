@@ -1,3 +1,17 @@
+/*++
+
+Copyright (c) Microsoft Corporation. All rights reserved.
+
+Module Name:
+
+    Logger.cpp
+
+Abstract:
+
+    C++ class that implements logging for this dll.
+
+--*/
+
 #pragma once
 class Logger
 {
@@ -6,7 +20,7 @@ public:
     {
         NONE,
         ERR,
-        WARNING,
+        WARN,
         INFO,
         VERBOSE
     };

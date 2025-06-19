@@ -1,4 +1,4 @@
-LIBRARY      "AzureFilesSmbAuth.DLL"
+LIBRARY      "AzFilesSmbMI.DLL"
 
 EXPORTS
     SmbSetCredential

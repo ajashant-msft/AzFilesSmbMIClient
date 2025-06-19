@@ -1,12 +1,28 @@
-// dllmain.cpp : Defines the entry point for the DLL application.
-#include "pch.h"
-#include "AzureFilesSmbAuth.h"
+/*++
+
+Copyright (c) Microsoft Corporation. All rights reserved.
+
+Module Name:
+
+    dllmain.cpp
+
+Abstract:
+
+    Defines the entry point for the DLL application.
+
+--*/
+
+#include "framework.h"
+#include "AzFilesSmbMI.h"
 
 BOOL APIENTRY DllMain( HMODULE hModule,
                        DWORD  ul_reason_for_call,
                        LPVOID lpReserved
                      )
 {
+    UNREFERENCED_PARAMETER(hModule);
+    UNREFERENCED_PARAMETER(lpReserved);
+
     switch (ul_reason_for_call)
     {
     case DLL_PROCESS_ATTACH:
@@ -16,28 +32,4 @@ BOOL APIENTRY DllMain( HMODULE hModule,
         break;
     }
     return TRUE;
-}
-
-extern "C" AZUREFILESSMBAUTH_API HRESULT SmbSetCredential(
-    _In_  PCWSTR pwszFileEndpointUri,
-    _In_  PCWSTR pwszOauthToken,
-    _Out_ PDWORD pdwCredentialExpiresInSeconds
-    )
-{
-    return SmbSetCredentialInternal(pwszFileEndpointUri, pwszOauthToken, pdwCredentialExpiresInSeconds);
-}
-
-extern "C" AZUREFILESSMBAUTH_API HRESULT SmbSetCredentialUsingTokenFromIMDS(
-    _In_  PCWSTR pwszFileEndpointUri,
-    _Out_ PDWORD pdwCredentialExpiresInSeconds
-    )
-{
-    return SmbSetCredentialInternal(pwszFileEndpointUri, nullptr /*pwszOauthToken*/, pdwCredentialExpiresInSeconds);
-}
-
-extern "C" AZUREFILESSMBAUTH_API HRESULT SmbClearCredential(
-    _In_  PCWSTR pwszFileEndpointUri
-    )
-{
-    return SmbClearCredentialInternal(pwszFileEndpointUri);
 }
