@@ -1,6 +1,6 @@
 ﻿using System.Runtime.InteropServices;
 
-namespace AzureFilesSmbAuthUtil
+namespace AzFilesSmbMIClient
 {
     class Program
     {
@@ -27,10 +27,10 @@ namespace AzureFilesSmbAuthUtil
 
         static public void ShowUsage()
         {
-            Console.WriteLine($"{DateTime.Now.ToString("yyy-MM-dd HH:mm:ss:fff")} Usage: AzureFilesSmbAuthUtil.exe set       <uri>");
-            Console.WriteLine($"{DateTime.Now.ToString("yyy-MM-dd HH:mm:ss:fff")} Usage: AzureFilesSmbAuthUtil.exe refresh   <uri>");
-            Console.WriteLine($"{DateTime.Now.ToString("yyy-MM-dd HH:mm:ss:fff")} Usage: AzureFilesSmbAuthUtil.exe set       <uri> <token>");
-            Console.WriteLine($"{DateTime.Now.ToString("yyy-MM-dd HH:mm:ss:fff")} Usage: AzureFilesSmbAuthUtil.exe clear     <uri>");
+            Console.WriteLine($"{DateTime.Now.ToString("yyy-MM-dd HH:mm:ss:fff")} Usage: AzFilesSmbMIClient.exe set       <uri>");
+            Console.WriteLine($"{DateTime.Now.ToString("yyy-MM-dd HH:mm:ss:fff")} Usage: AzFilesSmbMIClient.exe refresh   <uri>");
+            Console.WriteLine($"{DateTime.Now.ToString("yyy-MM-dd HH:mm:ss:fff")} Usage: AzFilesSmbMIClient.exe set       <uri> <token>");
+            Console.WriteLine($"{DateTime.Now.ToString("yyy-MM-dd HH:mm:ss:fff")} Usage: AzFilesSmbMIClient.exe clear     <uri>");
         }
 
         public static class AzureFilesSmbAuthErrorCode
