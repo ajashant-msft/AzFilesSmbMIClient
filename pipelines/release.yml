@@ -1,0 +1,33 @@
+parameters:
+  - name: buildConfig
+    displayName: Build Configuration to Use
+    default: Debug
+    values:
+    - Debug
+    - Release
+
+trigger:
+- master
+
+pool:
+  vmImage: 'windows-latest'
+
+variables:
+- name: buildConfiguration
+  value: ${{ parameters.buildConfig }}
+- group: CodeSigning
+
+steps:
+- task: UseDotNet@2
+  displayName: Setup .NET SDK Version 3.x
+  inputs:
+    packageType: sdk
+    version: 3.x
+    includePreviewVersions: true
+
+- task: DotNetCoreCLI@2
+  displayName: 'Build the Assembly'
+  inputs:
+    command: build
+    versioningScheme: byBuildNumber
+    arguments: '--configuration $(BuildConfiguration)'
