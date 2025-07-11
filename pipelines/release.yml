@@ -15,7 +15,6 @@ pool:
 variables:
 - name: buildConfiguration
   value: ${{ parameters.buildConfig }}
-- group: CodeSigning
 
 steps:
 - task: UseDotNet@2
