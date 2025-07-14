@@ -15,13 +15,14 @@ pool:
 variables:
 - name: buildConfiguration
   value: ${{ parameters.buildConfig }}
+- group: CodeSigning
 
 steps:
 - task: UseDotNet@2
-  displayName: Setup .NET SDK Version 3.x
+  displayName: Setup .NET SDK Version 9.x
   inputs:
     packageType: sdk
-    version: 3.x
+    version: 9.x
     includePreviewVersions: true
 
 - task: DotNetCoreCLI@2
@@ -30,4 +31,4 @@ steps:
     command: build
     versioningScheme: byBuildNumber
     arguments: '--configuration $(BuildConfiguration)'
-    projects: $(Build.SourcesDirectory)/windows/exe/AzFilesSmbMIClient.csproj
+    projects: $(Build.SourcesDirectory)/Windows/exe/AzFilesSmbMIClient.csproj
