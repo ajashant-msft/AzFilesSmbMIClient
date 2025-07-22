@@ -106,7 +106,7 @@ extends:
           displayName: 'Setup BuildNumber'  
           inputs:
             system: 'RevisionCounter'
-            major: '0'
+            major: '1'
             minor: '1'
             exclude_commit: true
           env:
@@ -198,6 +198,27 @@ extends:
             files_to_sign: '*.exe;*.dll'
             search_root: '$(BuildOutput)'
           condition: and(succeeded(), ne(variables['Agent.JobStatus'], 'Failed'))
+
+        - task: GitHubRelease@1
+          displayName: 'Publish signed binaries to GitHub Release'
+          inputs:
+            gitHubConnection: 'github.com_AzFilesSmbMIClient' # Service connection name https://dev.azure.com/msazure/One/_settings/adminservices?resourceId=c9e79771-fd89-49cd-bf15-fea8b7c43876
+            repositoryName: '$(Build.Repository.Name)'
+            action: 'create'
+            target: '$(Build.SourceVersion)'
+            tagSource: 'userSpecifiedTag'
+            tag: 'v$(Build.BuildNumber)'
+            title: 'Release v$(Build.BuildNumber)'
+            releaseNotesSource: 'inline'
+            releaseNotesInline: |
+              Automated release of signed binaries
+              Build: $(Build.BuildNumber)
+              Commit: $(Build.SourceVersion)
+            assets: '$(BuildOutput)/*'
+            assetUploadMode: 'replace'
+            isDraft: false
+            isPreRelease: true
+          condition: succeeded()
 
         - task: CopyFiles@2
           displayName: 'Copy signed DLLs back to build directory'
