@@ -25,11 +25,13 @@ extern AZFILESSMBMI_API int nAzFilesSmbMI;
 extern "C" AZFILESSMBMI_API HRESULT SmbSetCredential(
     _In_  PCWSTR pwszFileEndpointUri,
     _In_  PCWSTR pwszOauthToken,
+    _In_  PCWSTR pwszClientID,
     _Out_ PDWORD pdwCredentialExpiresInSeconds
     );
 
 extern "C" AZFILESSMBMI_API HRESULT SmbRefreshCredential(
-    _In_ PCWSTR pwszFileEndpointUri
+    _In_ PCWSTR pwszFileEndpointUri,
+    _In_ PCWSTR pwszClientID
     );
 
 extern "C" AZFILESSMBMI_API HRESULT SmbClearCredential(
@@ -39,11 +41,13 @@ extern "C" AZFILESSMBMI_API HRESULT SmbClearCredential(
 HRESULT SmbSetCredentialInternal(
     _In_      PCWSTR pwszFileEndpointUri,
     _In_opt_  PCWSTR pwszOauthToken,
+    _In_opt_  PCWSTR pwszClientID,
     _Out_     PDWORD pdwCredentialExpiresInSeconds
     );
 
 HRESULT SmbRefreshCredentialInternal(
-    _In_      PCWSTR pwszFileEndpointUri
+    _In_      PCWSTR pwszFileEndpointUri,
+    _In_opt_  PCWSTR pwszClientID
     );
 
 HRESULT SmbClearCredentialInternal(

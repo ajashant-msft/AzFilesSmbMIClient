@@ -18,12 +18,14 @@ namespace Microsoft.Azure.Files
         public static extern int SmbSetCredential(
                         string FileEndpointUri,
                         string OAuthToken,
+                        string clientId,
                         [MarshalAs(UnmanagedType.U8)] out ulong ExpiryInSeconds);
 
         [DllImport("AzFilesSmbMI.DLL", SetLastError = false,
             CharSet = CharSet.Unicode, ExactSpelling = true, CallingConvention = CallingConvention.StdCall)]
-        public static extern int SmbSetCredentialUsingTokenFromIMDS(
+        public static extern int SmbRefreshCredential(
                     string FileEndpointUri,
+                    string clientId,
                     [MarshalAs(UnmanagedType.U8)] out ulong ExpiryInSeconds);
 
         [DllImport("AzFilesSmbMI.DLL", SetLastError = false,

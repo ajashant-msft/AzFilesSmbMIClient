@@ -65,13 +65,18 @@ struct RefreshContext
     UniqueHandle shEvent;
     HRESULT      hrRefresh;
     std::wstring wstrFileEndpointUri;
+    std::wstring wstrClientID;
 
-    RefreshContext(_In_ PCWSTR pwszFileEndpointUri)
+    RefreshContext(_In_ PCWSTR pwszFileEndpointUri, _In_opt_ PCWSTR pwszClientID = nullptr)
     {
         timer = nullptr;
         shEvent = nullptr;
         hrRefresh = S_FALSE;
         wstrFileEndpointUri = pwszFileEndpointUri;
+        if (pwszClientID && pwszClientID[0] != L'\0')
+        {
+            wstrClientID = pwszClientID;
+        }
     }
 };
 
@@ -1289,6 +1294,7 @@ DWORD ElapsedSecondsFromNow(_In_ const std::string& timestamp)
 HRESULT SmbSetCredentialInternal(
     _In_      PCWSTR pwszFileEndpointUri,
     _In_opt_  PCWSTR pwszOauthToken,
+    _In_opt_  PCWSTR pwszClientID,
     _Out_     PDWORD pdwCredentialExpiresInSeconds
     )
 {
@@ -1322,13 +1328,17 @@ HRESULT SmbSetCredentialInternal(
             throw E_INVALIDARG;
         }
 
-        if (wstrAccountFileUri.substr(0, 8) != L"https://"){
+        if (wstrAccountFileUri.substr(0, 8) != L"https://") {
             LOG(Logger::ERR, L"File URI '%ls' is not prefixed with 'https://'", wstrAccountFileUri.c_str());
             throw E_INVALIDARG;
         }
 
         BOOL bGetTokenFromImds = ((pwszOauthToken == nullptr) || (pwszOauthToken[0] == L'\0'));
-        LOG(Logger::INFO, L"Authenticating access to '%ls' %ls", wstrAccountFileUri.c_str(), bGetTokenFromImds ? L"by fetching OAuth token from IMDS endpoint" : L"using provided OAuth token");
+        LOG(Logger::INFO, L"Authenticating access to '%ls' %ls", wstrAccountFileUri.c_str(),
+            bGetTokenFromImds ? (pwszClientID && (pwszClientID[0] != L'\0') ?
+                L"by fetching OAuth token from IMDS endpoint using user-managed identity" :
+                L"by fetching OAuth token from IMDS endpoint using system-managed identity") :
+            L"using provided OAuth token");
 
         std::string strHttpResponse;
         std::wstring wstrAccessToken;
@@ -1338,18 +1348,30 @@ HRESULT SmbSetCredentialInternal(
             // Get token for resource=https://storage.azure.com.  Note that there is NO trailing '/'.
             // OK     --> resource=https://storage.azure.com
             // NOT OK --> resource=https://storage.azure.com/
+            // Build the IMDS request URL with optional client ID
+            std::wstring imdsUrl = L"http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://storage.azure.com";
 
-            hrError = DoHttpVerb(L"GET",
-                                 L"http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://storage.azure.com",
-                                 L"",
-                                 strHttpResponse);
+            // Add client ID parameter if provided
+            if (pwszClientID && pwszClientID[0] != L'\0') 
+            {
+                imdsUrl += L"&client_id=";
+                imdsUrl += pwszClientID;
+                LOG(Logger::INFO, L"Using user-managed identity with client ID: %ls", pwszClientID);
+            }
+            else
+            {
+                LOG(Logger::INFO, L"Using system-managed identity (no client ID specified)");
+            }
+
+            hrError = DoHttpVerb(L"GET", imdsUrl, L"", strHttpResponse);
+
             if (FAILED(hrError))
             {
-                LOG(Logger::ERR, L"GET http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://storage.azure.com failed with error hr=0x%X", hrError);
+                LOG(Logger::ERR, L"GET %ls failed with error hr=0x%X", imdsUrl.c_str(), hrError);
                 throw hrError;
             }
 
-            std::string  access_tokenstr = GetValueFromJson(strHttpResponse, "access_token");
+            std::string access_tokenstr = GetValueFromJson(strHttpResponse, "access_token");
             wstrAccessToken = UTF8ToWide(access_tokenstr);
             strHttpResponse.clear();
         }
@@ -1359,9 +1381,9 @@ HRESULT SmbSetCredentialInternal(
         }
 
         hrError = DoHttpVerb(L"POST",
-                             wstrAccountFileUri + L"?restype=service&comp=kerbticket",
-                             wstrAccessToken,
-                             strHttpResponse);
+            wstrAccountFileUri + L"?restype=service&comp=kerbticket",
+            wstrAccessToken,
+            strHttpResponse);
         if (FAILED(hrError))
         {
             throw hrError;
@@ -1413,11 +1435,16 @@ VOID CALLBACK SmbRefreshTimerCallback(
     _In_      PTP_TIMER /*Timer*/)
 {
     UNREFERENCED_PARAMETER(Instance);
-    RefreshContext* pContext = (RefreshContext*) Context;
+    RefreshContext* pContext = (RefreshContext*)Context;
 
     DWORD dwCredentialExpiresInSeconds;
-    HRESULT hrError = SmbSetCredentialInternal(pContext->wstrFileEndpointUri.c_str(), nullptr, &dwCredentialExpiresInSeconds);
-    if(FAILED(hrError))
+    HRESULT hrError = SmbSetCredentialInternal(
+        pContext->wstrFileEndpointUri.c_str(),
+        nullptr,
+        pContext->wstrClientID.empty() ? nullptr : pContext->wstrClientID.c_str(),
+        &dwCredentialExpiresInSeconds);
+
+    if (FAILED(hrError))
     {
         LOG(Logger::ERR, L"SmbSetCredentialInternal hr=0x%X", hrError);
         pContext->hrRefresh = hrError;
@@ -1438,7 +1465,8 @@ VOID CALLBACK SmbRefreshTimerCallback(
 }
 
 HRESULT SmbRefreshCredentialInternal(
-    _In_      PCWSTR pwszFileEndpointUri
+    _In_      PCWSTR pwszFileEndpointUri,
+    _In_      PCWSTR pwszClientID
     )
 {
     // Initialize logger first
@@ -1454,12 +1482,12 @@ HRESULT SmbRefreshCredentialInternal(
             throw E_INVALIDARG;
         }
 
-        if (pwszFileEndpointUri[wcslen(pwszFileEndpointUri) - 1] != L'/'){
+        if (pwszFileEndpointUri[wcslen(pwszFileEndpointUri) - 1] != L'/') {
             LOG(Logger::ERR, L"File URI '%ls' is not ending with trailing '/'", pwszFileEndpointUri);
             throw E_INVALIDARG;
         }
 
-        auto ctx = std::make_shared<RefreshContext>(pwszFileEndpointUri);
+        auto ctx = std::make_shared<RefreshContext>(pwszFileEndpointUri, pwszClientID);
 
         ctx->shEvent.reset(CreateEventW(nullptr, TRUE, FALSE, nullptr));
         if (!ctx->shEvent) {
@@ -1470,7 +1498,7 @@ HRESULT SmbRefreshCredentialInternal(
         }
 
         ctx->timer = CreateThreadpoolTimer(SmbRefreshTimerCallback, ctx.get(), nullptr);
-        if (!ctx->timer){
+        if (!ctx->timer) {
             DWORD gle = ::GetLastError();
             hrError = HRESULT_FROM_WIN32(gle);
             LOG(Logger::ERR, L"CreateThreadpoolTimer failed hr=0x%X", hrError);
@@ -1574,17 +1602,19 @@ HRESULT SmbClearCredentialInternal(
 HRESULT SmbSetCredential(
     _In_  PCWSTR pwszFileEndpointUri,
     _In_  PCWSTR pwszOauthToken,
+    _In_  PCWSTR pwszClientID,
     _Out_ PDWORD pdwCredentialExpiresInSeconds
 )
 {
-    return SmbSetCredentialInternal(pwszFileEndpointUri, pwszOauthToken, pdwCredentialExpiresInSeconds);
+    return SmbSetCredentialInternal(pwszFileEndpointUri, pwszOauthToken, pwszClientID, pdwCredentialExpiresInSeconds);
 }
 
 HRESULT SmbRefreshCredential(
-    _In_  PCWSTR pwszFileEndpointUri
+    _In_  PCWSTR pwszFileEndpointUri,
+    _In_opt_  PCWSTR pwszClientID
 )
 {
-    return SmbRefreshCredentialInternal(pwszFileEndpointUri);
+    return SmbRefreshCredentialInternal(pwszFileEndpointUri, pwszClientID);
 }
 
 HRESULT SmbClearCredential(

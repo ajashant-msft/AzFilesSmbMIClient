@@ -20,6 +20,8 @@ namespace AzFilesSmbMIClient
             Console.WriteLine($"{DateTime.Now.ToString("yyy-MM-dd HH:mm:ss:fff")} Usage: AzFilesSmbMIClient.exe set       <uri>");
             Console.WriteLine($"{DateTime.Now.ToString("yyy-MM-dd HH:mm:ss:fff")} Usage: AzFilesSmbMIClient.exe refresh   <uri>");
             Console.WriteLine($"{DateTime.Now.ToString("yyy-MM-dd HH:mm:ss:fff")} Usage: AzFilesSmbMIClient.exe set       <uri> <token>");
+            Console.WriteLine($"{DateTime.Now.ToString("yyy-MM-dd HH:mm:ss:fff")} Usage: AzFilesSmbMIClient.exe set       <uri> <token> <clientId>");
+            Console.WriteLine($"{DateTime.Now.ToString("yyy-MM-dd HH:mm:ss:fff")} Usage: AzFilesSmbMIClient.exe refresh   <uri> <clientId>");
             Console.WriteLine($"{DateTime.Now.ToString("yyy-MM-dd HH:mm:ss:fff")} Usage: AzFilesSmbMIClient.exe clear     <uri>");
         }
 
@@ -48,6 +50,7 @@ namespace AzFilesSmbMIClient
             string verb = args[0].ToUpper();
             string uri = args[1];
             string token = args.Length < 3 ? "" : args[2];
+            string clientId = args.Length < 4 ? "" : args[3];
 
             int hResult = AzureFilesSmbAuthErrorCode.S_FALSE;
 
@@ -55,11 +58,11 @@ namespace AzFilesSmbMIClient
             {
                 if (token.Length > 0)
                 {
-                    hResult = AzFilesSmbMI.SmbSetCredential(uri, token, out ulong expiryInSeconds);
+                    hResult = AzFilesSmbMI.SmbSetCredential(uri, token, clientId, out ulong expiryInSeconds);
                 }
                 else
                 {
-                    hResult = AzFilesSmbMI.SmbSetCredentialUsingTokenFromIMDS(uri, out ulong expiryInSeconds);
+                    hResult = AzFilesSmbMI.SmbRefreshCredential(uri, clientId, out ulong expiryInSeconds);
                 }
             }
             else if (verb.Equals("REFRESH"))
@@ -77,11 +80,11 @@ namespace AzFilesSmbMIClient
                 {
                     while (true)
                     {
-                        hResult = AzFilesSmbMI.SmbSetCredentialUsingTokenFromIMDS(uri, out ulong expiryInSeconds);
+                        hResult = AzFilesSmbMI.SmbRefreshCredential(uri, clientId, out ulong expiryInSeconds);
 
                         if(AzureFilesSmbAuthErrorCode.Failed(hResult))
                         {
-                            Console.WriteLine($"{DateTime.Now.ToString("yyy-MM-dd HH:mm:ss:fff")}: [TID:{Thread.CurrentThread.ManagedThreadId}] SmbSetCredentialUsingTokenFromIMDS failed: {hResult}");
+                            Console.WriteLine($"{DateTime.Now.ToString("yyy-MM-dd HH:mm:ss:fff")}: [TID:{Thread.CurrentThread.ManagedThreadId}] SmbRefreshCredential failed: {hResult}");
                             break;
                         }
 
