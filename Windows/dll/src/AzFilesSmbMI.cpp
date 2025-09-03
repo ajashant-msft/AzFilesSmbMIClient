@@ -30,6 +30,9 @@ Abstract:
 #include <iomanip>
 #include <chrono>
 #include <unordered_map>
+#include <algorithm>
+#include <cctype>
+#include <stdexcept>
 #include "Logger.h"
 #include "AzFilesSmbMI.h"
 
@@ -37,6 +40,7 @@ Abstract:
 std::vector<unsigned char> FromBase64(_In_ const std::string& str);
 std::string GetValueFromJson(_In_ const std::string& json, _In_ const std::string& key);
 std::wstring UTF8ToWide(_In_ const std::string& utf8Str);
+bool IsRunningInContainer();
 HRESULT InsertKerberosTicket(_In_ const unsigned char* kerberosTicket, _In_ size_t ticketLength);
 HRESULT DisplayKerbTicket(_In_ PCWSTR pwszTargetName, _In_ bool bPurge);
 std::unique_ptr<wchar_t[]> GetAllResponseHeaders(_In_ HINTERNET hRequest);
@@ -334,6 +338,116 @@ public:
     operator HANDLE() const { return m_handle; }
 };
 
+bool IsRunningInContainer()
+{
+    // Check for Windows container-specific registry keys
+    HKEY hKey;
+    if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, 
+                     L"SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment", 
+                     0, KEY_READ, &hKey) == ERROR_SUCCESS) {
+        
+        wchar_t buffer[256];
+        DWORD bufferSize = sizeof(buffer);
+        DWORD valueType;
+        
+        // Check for container-specific environment variables in registry
+        if (RegQueryValueExW(hKey, L"CONTAINER_HOST", nullptr, &valueType, 
+                            (LPBYTE)buffer, &bufferSize) == ERROR_SUCCESS) {
+            RegCloseKey(hKey);
+            LOG(Logger::VERBOSE, L"Container detected via CONTAINER_HOST registry key");
+            return true;
+        }
+        
+        bufferSize = sizeof(buffer);
+        if (RegQueryValueExW(hKey, L"CONTAINER_NETWORK_NAMESPACE_ID", nullptr, &valueType, 
+                            (LPBYTE)buffer, &bufferSize) == ERROR_SUCCESS) {
+            RegCloseKey(hKey);
+            LOG(Logger::VERBOSE, L"Container detected via CONTAINER_NETWORK_NAMESPACE_ID registry key");
+            return true;
+        }
+        
+        RegCloseKey(hKey);
+    }
+    
+    // Check for container type in registry
+    if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"SYSTEM\\CurrentControlSet\\Control", 0, KEY_READ, &hKey) == ERROR_SUCCESS) {
+        DWORD dwType;
+        DWORD dwSize = sizeof(DWORD);
+        DWORD containerType;
+        if (RegQueryValueExW(hKey, L"ContainerType", nullptr, &dwType, (LPBYTE)&containerType, &dwSize) == ERROR_SUCCESS) {
+            RegCloseKey(hKey);
+            if (containerType == 2) { // Check for Docker container type
+                LOG(Logger::VERBOSE, L"Container detected via ContainerType registry value");
+                return true;
+            }
+        }
+        RegCloseKey(hKey);
+    }
+    
+    // Check for Docker/container environment variables
+    wchar_t envBuffer[512];
+    const wchar_t* containerEnvVars[] = {
+        L"DOCKER_CONTAINER",
+        L"CONTAINER_ID", 
+        L"CONTAINER_SANDBOX_MOUNT_POINT",
+        L"CONTAINER_NETWORK_NAMESPACE_ID",
+        L"DOTNET_RUNNING_IN_CONTAINER",
+        L"DOTNET_RUNNING_IN_CONTAINERS"
+    };
+
+    for (const auto& envVar : containerEnvVars) {
+        if (GetEnvironmentVariableW(envVar, envBuffer, sizeof(envBuffer)/sizeof(wchar_t)) > 0) {
+            LOG(Logger::VERBOSE, L"Container detected via environment variable: %ls", envVar);
+            return true;
+        }
+    }
+
+    // In Windows container, the default users are ContainerUser and ContainerAdministrator. 
+    // Hence, we check for these folders to determine if we are running inside a container or not
+    WIN32_FIND_DATAW findData;
+    HANDLE hFind = FindFirstFileW(L"C:\\Users\\*", &findData);
+    
+    if (hFind == INVALID_HANDLE_VALUE) 
+    {
+        DWORD error = GetLastError();
+        LOG(Logger::ERR, L"Failed to enumerate C:\\Users directory, error=%d", error);
+        return false;
+    }
+
+    bool foundContainer = false;
+    
+    do 
+    {
+        // Skip current directory (.) and parent directory (..) entries
+        if (wcscmp(findData.cFileName, L".") == 0 || wcscmp(findData.cFileName, L"..") == 0) 
+        {
+            continue;
+        }
+        
+        // Check if this is a directory
+        if (findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) 
+        {
+            LOG(Logger::VERBOSE, L"Found user folder: %ls", findData.cFileName);
+            
+            // Convert to lowercase for case-insensitive comparison
+            std::wstring folderName(findData.cFileName);
+            std::transform(folderName.begin(), folderName.end(), folderName.begin(), ::towlower);
+            
+            // Check if folder name contains "container"
+            if (folderName.find(L"container") != std::wstring::npos) 
+            {
+                LOG(Logger::VERBOSE, L"Container user folder detected: %ls", findData.cFileName);
+                foundContainer = true;
+                break; // Found one, no need to continue
+            }
+        }
+    } while (FindNextFileW(hFind, &findData));
+    
+    FindClose(hFind);
+    
+    return foundContainer;
+}
+
 // Insert a Kerberos ticket into the cache
 HRESULT InsertKerberosTicket(_In_ const unsigned char* kerberosTicket, _In_ size_t ticketLength)
 {
@@ -342,17 +456,24 @@ HRESULT InsertKerberosTicket(_In_ const unsigned char* kerberosTicket, _In_ size
         return E_INVALIDARG;
     }
 
+    // Log that we're running in potentially restricted environment
+    LOG(Logger::VERBOSE, L"Attempting Kerberos ticket insertion in %ls environment", 
+        IsRunningInContainer() ? L"'Container'" : L"'Native'");
+        
     HRESULT hrError = S_OK;
     LSAHandle lsaHandle;
     PVOID pResponse = nullptr;
     ULONG responseSize = 0;
     KERB_SUBMIT_TKT_REQUEST* pSubmitRequest = nullptr;
+    HANDLE hToken = nullptr;
 
     try
     {
         // Connect to LSA
         hrError = lsaHandle.Connect();
-        if (FAILED(hrError)) {
+        if (FAILED(hrError)) 
+        {
+            LOG(Logger::ERR, L"Connect to LSA failed. Error: 0x%X", hrError);
             throw hrError;
         }
 
@@ -372,6 +493,22 @@ HRESULT InsertKerberosTicket(_In_ const unsigned char* kerberosTicket, _In_ size
             throw hrError;
         }
 
+        if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &hToken)) {
+            HRESULT hrError = HRESULT_FROM_WIN32(GetLastError());
+            LOG(Logger::ERR, L"OpenProcessToken failed. Error: %lu\n", hrError);
+            throw hrError;
+        }
+    
+        TOKEN_STATISTICS ts;
+        DWORD dwSize;
+        if (!GetTokenInformation(hToken, TokenStatistics, &ts, sizeof(ts), &dwSize)) {
+            HRESULT hrError = HRESULT_FROM_WIN32(GetLastError());
+            LOG(Logger::ERR, L"GetTokenInformation failed. Error: %lu\n", hrError);            
+            throw hrError;
+        }
+
+        LOG(Logger::VERBOSE, L"Logon ID (LUID): 0x%08x%08x", ts.AuthenticationId.HighPart, ts.AuthenticationId.LowPart);
+
         // Allocate memory for the submit request
         size_t submitRequestSize = sizeof(KERB_SUBMIT_TKT_REQUEST) + ticketLength;
         pSubmitRequest = static_cast<KERB_SUBMIT_TKT_REQUEST*>(HeapAlloc(GetProcessHeap(), 0, submitRequestSize));
@@ -382,15 +519,14 @@ HRESULT InsertKerberosTicket(_In_ const unsigned char* kerberosTicket, _In_ size
             throw hrError;
         }
 
-        // Initialize submit request
-        LUID luidZero = {0, 0};
+        // Initialize submit request        
         pSubmitRequest->MessageType = KerbSubmitTicketMessage;
         pSubmitRequest->KerbCredSize = static_cast<ULONG>(ticketLength);
         pSubmitRequest->KerbCredOffset = sizeof(KERB_SUBMIT_TKT_REQUEST);
-        pSubmitRequest->LogonId = luidZero;
+        pSubmitRequest->LogonId = ts.AuthenticationId;
         pSubmitRequest->Key.KeyType = 0;
         pSubmitRequest->Key.Length = 0;
-        pSubmitRequest->Key.Offset = 0;
+        pSubmitRequest->Key.Offset = 0;         
 
         // Copy ticket data
         memcpy(reinterpret_cast<BYTE*>(pSubmitRequest) + pSubmitRequest->KerbCredOffset,
@@ -485,6 +621,12 @@ HRESULT InsertKerberosTicket(_In_ const unsigned char* kerberosTicket, _In_ size
     if (pResponse)
     {
         LsaFreeReturnBuffer(pResponse);
+    }
+
+    if(hToken)
+    {
+        CloseHandle(hToken);
+        hToken = nullptr;
     }
 
     return hrError;
