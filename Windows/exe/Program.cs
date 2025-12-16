@@ -144,7 +144,7 @@ namespace AzFilesSmbMIClient
 
                 if (AzFilesSmbMIClientErrorCode.Succeeded(hResult))
                 {
-                    TraceMessage($"Auto refresh will run in the background for {expireTimeSeconds} seconds.");
+                    TraceMessage($"Auto refresh is running in the background; Will exit only after {expireTimeSeconds} seconds or if it encounters an error.");
                     Thread.Sleep(TimeSpan.FromSeconds(expireTimeSeconds));
 
                     TraceMessage($"Auto refresh will end now.");

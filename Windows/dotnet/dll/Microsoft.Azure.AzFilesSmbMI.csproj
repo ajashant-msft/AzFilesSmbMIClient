@@ -8,6 +8,8 @@
   </PropertyGroup>
   <PropertyGroup>
     <Version>$(Version)</Version>
+    <SignAssembly>True</SignAssembly>
+    <AssemblyOriginatorKeyFile>keyfile.snk</AssemblyOriginatorKeyFile>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\dll\src\AzFilesSmbMI.vcxproj">
@@ -33,12 +35,9 @@
     <Message Text="Looking for native DLL at: $(NativeDllPath)" Importance="high" />
     <Message Text="Target platform: $(Platform), VC++ platform: $(VCPlatform)" Importance="high" />
     
-    <Copy SourceFiles="$(NativeDllPath)" 
-          DestinationFolder="$(OutDir)" 
-          Condition="Exists('$(NativeDllPath)')" />
+    <Copy SourceFiles="$(NativeDllPath)" DestinationFolder="$(OutDir)" Condition="Exists('$(NativeDllPath)')" />
           
-    <Warning Text="Native DLL not found at $(NativeDllPath)" 
-             Condition="!Exists('$(NativeDllPath)')" />
+    <Warning Text="Native DLL not found at $(NativeDllPath)" Condition="!Exists('$(NativeDllPath)')" />
   </Target>
 
   <!-- Include native DLL in NuGet package -->
