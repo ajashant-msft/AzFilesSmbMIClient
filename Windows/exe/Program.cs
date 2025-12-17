@@ -144,17 +144,10 @@ namespace AzFilesSmbMIClient
 
                 if (AzFilesSmbMIClientErrorCode.Succeeded(hResult))
                 {
-                    TraceMessage($"Auto refresh is running in the background; Will exit only after {expireTimeSeconds} seconds or if it encounters an error.");
+                    TraceMessage($"Auto refresh is running in the background; Will end only after {expireTimeSeconds} seconds or if it encounters an error.");
                     Thread.Sleep(TimeSpan.FromSeconds(expireTimeSeconds));
 
                     TraceMessage($"Auto refresh will end now.");
-
-                    hResult = AzFilesSmbMI.SmbClearCredential(uri);
-                    if (hResult == AzFilesSmbMIClientErrorCode.E_NOTFOUND)
-                    {
-                        TraceMessage($"Ignoring ERROR_NOT_FOUND - Auto refresh already ended.");
-                        hResult = AzFilesSmbMIClientErrorCode.S_OK;
-                    }
                 }
 
                 TraceMessage($"Main thread exiting.");
